@@ -40,18 +40,40 @@ def load_and_prepare_data(csv_path: str = "Movies.csv"):
     return movies_data, similarity
 
 
+def find_best_match(query: str, titles: list[str]):
+    """Find the best matching movie title using exact, substring, or fuzzy match."""
+    query_lower = query.strip().lower()
+
+    # 1. Exact match (case-insensitive)
+    for title in titles:
+        if title.lower() == query_lower:
+            return title
+
+    # 2. Substring match
+    for title in titles:
+        if query_lower in title.lower():
+            return title
+
+    # 3. Fuzzy matching with difflib
+    titles_lower_map = {t.lower(): t for t in titles}
+    matches = difflib.get_close_matches(query_lower, list(titles_lower_map.keys()), n=1, cutoff=0.3)
+    if matches:
+        return titles_lower_map[matches[0]]
+
+    return None
+
+
 def recommend_movies(movie_name: str, movies_data: pd.DataFrame, similarity: np.ndarray, top_n: int = 15):
     """Recommend similar movies based on cosine similarity."""
     list_of_all_titles = movies_data["title"].tolist()
 
     # Find closest match for input movie name
-    close_matches = difflib.get_close_matches(movie_name, list_of_all_titles)
+    close_match = find_best_match(movie_name, list_of_all_titles)
 
-    if not close_matches:
+    if not close_match:
         print(f"No close match found for '{movie_name}'. Please try another title.")
         return []
 
-    close_match = close_matches[0]
     print(f"\nTop match in database: '{close_match}'\n")
 
     movie_rows = movies_data[movies_data.title == close_match]
@@ -59,7 +81,7 @@ def recommend_movies(movie_name: str, movies_data: pd.DataFrame, similarity: np.
         print(f"Could not find details for '{close_match}'.")
         return []
 
-    index_of_movie = movie_rows["index"].values[0]
+    index_of_movie = movie_rows.index[0]
     similarity_scores = list(enumerate(similarity[index_of_movie]))
 
     # Sort movies based on similarity score (descending)
@@ -71,7 +93,7 @@ def recommend_movies(movie_name: str, movies_data: pd.DataFrame, similarity: np.
     for movie in sorted_similar_movies:
         idx = movie[0]
         score = movie[1]
-        title = movies_data[movies_data.index == idx]["title"].values[0]
+        title = movies_data.iloc[idx]["title"]
         if count <= top_n:
             print(f"{count:2d}. {title:<40} (similarity: {score:.3f})")
             recommendations.append(title)
